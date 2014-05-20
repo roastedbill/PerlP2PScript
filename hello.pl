@@ -2,7 +2,11 @@
 use 5.010;
 use strict;
 use warnings;
-use Scalar::Util qw(looks_like_number);
+use LWP::Simple;
+use LWP::UserAgent;
+use HTTP::Request;
+use HTTP::Response;
+
 
 use constant false => 0;
 use constant true => 1;
@@ -18,7 +22,9 @@ This Perl Script automatically scan and fetching executable files via torrent
 
 my $fileLineCount = 0;
 my @fileWebsites;
-
+my $ua = LWP::UserAgent->new('IE 9');
+$ua->timeout(10);
+my $torrentCount = 0;
 
 
 open(INFILE,$ARGV[0])
@@ -32,17 +38,49 @@ The name of the file is specified by the first command line parameter
 
 #reading websites from the file
 while($fileWebsites[$fileLineCount] = <INFILE>){
+	chomp $fileWebsites[$fileLineCount];
+	scanWebsite($fileWebsites[$fileLineCount]); 
 	$fileLineCount++;
 }
 
 if($fileLineCount == 0){
-	print STDERR "Could not open file\n";
+	print STDERR "Empty file\n";
 }
 
-foreach my $n (@fileWebsites){
-	say $n;
-}
-#chomp $name;
-#if(looks_like_number($name)){
-#	say "hi $name, what's up?";
+#debug website list
+#foreach my $n (@fileWebsites){
+#	say $n;
 #}
+
+
+########## lvl_1 sub declarations come here ##########
+
+=pod
+=head2 sacnWebsite Function:
+
+This function goes to the website indicated by the parameter and scan for executable files.
+=cut
+
+sub scanWebsite{
+	my $req = HTTP::Request->new(GET => @_);
+	my $response = $ua->request($req);
+ 	
+ 	#debug
+ 	say @_;
+	if ($response->is_success){
+   		print $response->content;  
+	}
+	else {
+    	print $response->status_line;
+	}
+	
+	return;
+}
+
+sub activeWebsite{ 
+	
+
+}
+
+
+########## lvl_2 sub declarations come here ##########
