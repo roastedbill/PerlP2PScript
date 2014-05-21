@@ -51,7 +51,9 @@ The name of the file is specified by the first command line parameter
 open(my $outputFile, '>', 'torrentLinks.txt');
 
 ################## Main Function ##################
-scanWebsite('http://thepiratebay.se/browse/300');
+for (my $i=0;$i<100;$i++){
+	scanWebsite("http://thepiratebay.se/browse/300/$i/3");
+}
 close $outputFile;
 ########## lvl_1 sub declarations come here ##########
 
@@ -76,20 +78,21 @@ sub scanWebsite{
 	#}
 	
 	##### Mojo version #####
-	my $contents = $ua->get(@_ => {DNT => 1}) -> res -> body;
-	chomp $contents;
-	my ($line,@lines) = split(/\n/,$contents);
-	foreach $line(@lines){
-		my $dom = Mojo::DOM -> new($line);
+	say @_;
+	my $dom = Mojo::DOM->new($ua->get(@_ => {DNT => 1}) -> res -> body);
+	my @urls = $dom->find('[title="Download this torrent"]')->attr('href');
+
+	while(@urls){
+		my $url = shift @urls;
+		if (!$downloaded{$url}){
+    	
+    		$downloaded{$url} = 1;
+	   		$torrentCount++;         
+
+	    	print "$url\n";
+			print $outputFile "$url\n";
+		}
 	}
-  	#my $url;
-
-	#print "$url\n";
-	#print $outputFile "$url\n";
-
-    #$downloaded{$url} = 1;
-    #$torrentCount++;         
-
 
 	return;
 }
