@@ -19,12 +19,11 @@ This Perl Script automatically scan and fetching executable files via torrent
 
 #global variables are defined here
 
-my $fileLineCount = 0;
-my @fileWebsites;
 my $ua = Mojo::UserAgent->new;
 my %downloaded;
-my $torrentCount = 0;
-
+my $torrentCount=0;
+my $i=0;
+my $j=3;
 =pod
 =head1 Reading websites from a file
 
@@ -51,9 +50,14 @@ The name of the file is specified by the first command line parameter
 open(my $outputFile, '>', 'torrentLinks.txt');
 
 ################## Main Function ##################
-for (my $i=0;$i<100;$i++){
-	scanWebsite("http://thepiratebay.se/browse/300/$i/3");
+for(;$j<5;$j++){
+	for ($i=0;$i<100;$i++){
+		scanWebsite("http://thepiratebay.se/browse/${j}00/$i/3");
+		#say $torrentCount;
+	}
 }
+ 
+say "In total $torrentCount torrent addresses have been successfully fetched!";
 close $outputFile;
 ########## lvl_1 sub declarations come here ##########
 
@@ -79,16 +83,19 @@ sub scanWebsite{
 	
 	##### Mojo version #####
 	say @_;
+	my $pageN = 100*($j-3)+$i+1;
+	say "fetching from page $pageN out of 200";
 	my $dom = Mojo::DOM->new($ua->get(@_ => {DNT => 1}) -> res -> body);
-	my @urls = $dom->find('[title="Download this torrent"]')->attr('href');
+	my @urls =split(/\n/, $dom->find('[title="Download this torrent"]')->attr('href'));
 
 	while(@urls){
 		my $url = shift @urls;
 		if (!$downloaded{$url}){
     	
     		$downloaded{$url} = 1;
-	   		$torrentCount++;         
-
+	   		$torrentCount++;
+			
+			#print "torrentCount is now: $torrentCount\n";
 	    	print "$url\n";
 			print $outputFile "$url\n";
 		}
