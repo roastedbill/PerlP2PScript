@@ -46,19 +46,26 @@ The name of the file is specified by the first command line parameter
 #	print STDERR "Empty file\n";
 #}
 
-################## FILE OUT ##################
-open(my $outputFile, '>', 'torrentLinks.txt');
 
 ################## Main Function ##################
-for(;$j<5;$j++){
-	for ($i=0;$i<100;$i++){
-		scanWebsite("http://thepiratebay.se/browse/${j}00/$i/3");
-		#say $torrentCount;
-	}
-}
+
+#open(my $outputFile, '>', 'torrentLinks.txt');
+
+#for(;$j<5;$j++){
+#	for ($i=0;$i<100;$i++){
+#		scanWebsite("http://thepiratebay.se/browse/${j}00/$i/3");
+#	}
+#}
  
-say "In total $torrentCount torrent addresses have been successfully fetched!";
-close $outputFile;
+#say "In total $torrentCount torrent addresses have been successfully fetched!";
+
+#close $outputFile;
+open(my $linkFile, '<', 'torrentLinks.txt') or die "Couldn't Open torrentLinks.txt for reading because: .$!";
+
+while(my $link = <$linkFile>){
+	downloadTorrent($link);
+}
+
 ########## lvl_1 sub declarations come here ##########
 
 =pod
@@ -96,8 +103,8 @@ sub scanWebsite{
 	   		$torrentCount++;
 			
 			#print "torrentCount is now: $torrentCount\n";
-	    	print "$url\n";
-			print $outputFile "$url\n";
+	    	print 'https:'."$url\n";
+#			print $outputFile 'https:'."$url\n";
 		}
 	}
 
@@ -109,5 +116,10 @@ sub scanWebsite{
 =pod
 =head2 Paser Functions:
 
-These functions act as website-depended plugin to extract torrent links.
+This function downloads the .torrent files using wget.
 =cut
+
+sub downloadTorrent{
+	chomp @_;
+	system("wget --no-check-certificate ". "@_". " -P ./torrents/");
+}
