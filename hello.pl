@@ -49,17 +49,17 @@ The name of the file is specified by the first command line parameter
 
 ################## Main Function ##################
 
-#open(my $outputFile, '>', 'torrentLinks.txt');
+open(my $outputFile, '>', 'torrentLinks.txt');
 
-#for(;$j<5;$j++){
-#	for ($i=0;$i<100;$i++){
-#		scanWebsite("http://thepiratebay.se/browse/${j}00/$i/3");
-#	}
-#}
+for(;$j<5;$j++){
+	for ($i=0;$i<100;$i++){
+		scanWebsite("http://thepiratebay.se/browse/${j}00/$i/3");
+	}
+}
  
-#say "In total $torrentCount torrent addresses have been successfully fetched!";
+say "In total $torrentCount torrent addresses have been successfully fetched!";
+close $outputFile;
 
-#close $outputFile;
 open(my $linkFile, '<', 'torrentLinks.txt') or die "Couldn't Open torrentLinks.txt for reading because: .$!";
 
 while(my $link = <$linkFile>){
