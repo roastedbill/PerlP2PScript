@@ -20,6 +20,8 @@ This Perl Script automatically scan and fetching executable files via torrent
 
 my $ua = Mojo::UserAgent->new;
 my $torrentCount=0;
+my $lastTimeCount=0;
+my $window=10; #add torrent to uTorrent every 10 torrent downloaded
 my $i=0;
 my $j=3;
 
@@ -39,20 +41,25 @@ The name of the file is specified by the first command line parameter
 
 ################## Main Function ##################
 
-
-
 for(;$j<5;$j++){
 	for ($i=0;$i<100;$i++){
-		scanWebsite("http://thepiratebay.se/browse/${j}00/$i/3");
+		#scanWebsite("http://thepiratebay.se/browse/${j}00/$i/3");
 	}
 }
- 
-#say "In total $torrentCount torrent addresses have been successfully fetched!";
 
-downloadTorrent();
 
-downloadFile();
+my $sth3 = $db->prepare_cached('SELECT * FROM piratebaylinks WHERE downloaded = ?')
+or die "Couldn't prepare statement: " . $db->errstr;
+$sth3->execute('0');  
+#my @d= $sth3->fetchrow_array();
 
+while($sth3->rows){	
+	downloadTorrent();
+	downloadFile();
+}
+
+$sth3->finish;
+say "All the files are added to uTorrent download queue successfully!";
 $db->disconnect();
 
 ########## lvl_1 sub declarations come here ##########
@@ -75,11 +82,7 @@ sub scanWebsite{
 		my $sth1 = $db->prepare_cached('SELECT * FROM piratebaylinks WHERE site=?') 
 		or die "Couldn't prepare statement: " . $db->errstr;
 		$sth1->execute('https:'.$url);
-		say $sth1->rows;
 		if (!$sth1->rows) {
-    		$sth1->finish;
-	   		$torrentCount++;
-			
 	    	print 'https:'."$url\n";
 	    	my $sth2 = $db->prepare_cached('INSERT INTO piratebaylinks(site) VALUES(?)')
 	    	or die "Couldn't prepare statement: " . $db->errstr;
@@ -87,6 +90,7 @@ sub scanWebsite{
 	    	$sth2->execute('https:'.$url);
 	    	$sth2->finish;
 		}
+		$sth1->finish;
 	}
 
 	return;
@@ -100,29 +104,21 @@ sub scanWebsite{
 This function downloads the .torrent files using wget and change "downloaded", "downloaddate" attribute of the link.
 =cut
 
-sub downloadTorrent{
-
-	my $sth3 = $db->prepare_cached('SELECT * FROM piratebaylinks WHERE downloaded = ?')
-    or die "Couldn't prepare statement: " . $db->errstr;
-    $sth3->execute('0');    
-
-    if($sth3->rows == 0){
-    	say "No new items to download!";
-    }
-    else{
-	    my @data;
-	    my $db_parser = DateTime::Format::DBI->new($db);
-	   	while(@data = $sth3->fetchrow_array()){
-			if(system("wget --no-check-certificate ". "$data[1]". " -P ./torrents/") == 0){
-				my $dt = DateTime->now(time_zone => 'local');
-				my $sth4 = $db->prepare_cached('UPDATE piratebaylinks SET downloaded=1, downloaddate=? WHERE id=?')
-				or die "Couldn't prepare statement: " . $db->errstr;
-				$sth4->execute($dt,$data[0]);
-				$sth4->finish;
-			}
+sub downloadTorrent{	
+	my @data;
+	my $db_parser = DateTime::Format::DBI->new($db);
+	while(@data = $sth3->fetchrow_array()){
+		if(system("wget --no-check-certificate ". "$data[1]". " -P ./torrents/") == 0){
+			my $dt = DateTime->now(time_zone => 'local');
+			my $sth4 = $db->prepare_cached('UPDATE piratebaylinks SET downloaded=1, downloaddate=? WHERE id=?')
+			or die "Couldn't prepare statement: " . $db->errstr;
+			$sth4->execute($dt,$data[0]);
+			$sth4->finish;
+			$torrentCount++;
 		}
+		last if($torrentCount-$lastTimeCount>=$window);
 	}
-	$sth3->finish;
+	$lastTimeCount = $torrentCount;
 	return;
 }
 
@@ -151,12 +147,12 @@ sub downloadFile{
 
 	my $db_parser = DateTime::Format::DBI->new($db);
 	foreach my $fp(glob("$dir/*.torrent")){
-		$utorrent->add_file($fp);
 		my @temp = split(/\//,$fp);
 		my $fn; #name of the file
 		while(@temp){
 			$fn = shift @temp;
 		}
+		formatString(\$fn);
 		my $dt = DateTime->now(time_zone => 'local');
 		my $sth5 = $db->prepare_cached('SELECT * FROM piratebaylinks WHERE filedownloaded=0 and site REGEXP ?')
     	or die "Couldn't prepare statement: " . $db->errstr;
@@ -172,4 +168,16 @@ sub downloadFile{
 	}
 
 	return;
+}
+
+# This subfunction belongs to downloadFile function. It provides formated string for MySQL regular expression 
+sub formatString{
+	my $string = $_[0];
+	$$string =~ s/\(/\\\(/g;
+	$$string =~ s/\)/\\\)/g;
+	$$string =~ s/\[/\\\[/g;
+	$$string =~ s/\]/\\\]/g;	
+	$$string =~ s/\{/\\\{/g;
+	$$string =~ s/\}/\\\}/g;
+	return
 }
