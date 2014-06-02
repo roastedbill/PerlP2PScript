@@ -21,14 +21,14 @@ This Perl Script automatically scan and fetching executable files via magnet lin
 my $ua = Mojo::UserAgent->new;
 
 #####choose your website here#####
-my $website = 'KICKASS'; #'PIRATEBAY','KICKASS'
+my @websites = ('KICKASS','PIRATEBAY');
+my $website;
+#my $website = 'KICKASS'; #'PIRATEBAY','KICKASS'
 my $title; 
 my $i;
 my $j;
 my $totalPages;
 my $currentPage;
-my $lastTimePage;
-my $window=10; #add torrent to uTorrent every 10 torrent downloaded
 
 =pod
 =head1 Reading webmagnetlinks from a file
@@ -46,14 +46,11 @@ The name of the file is specified by the first command line parameter
 my $db = DBI->connect('dbi:mysql:torrentlinks', 'root', 'lrs19920827')
 or die "Connection Error $DBI::errstr\n";
 
-while(1)
+while($website = shift @websites){
 	scanWeb($website);
 	downloadFile();
-	$lastTimePage = $currentPage;
-	last if($currentPage == $totalPages);
+	say "All the files from $website have been added to uTorrent download queue successfully!";
 }
-
-say "All the files from $website have been added to uTorrent download queue successfully!";
 $db->disconnect();
 
 ########## lvl_1 sub declarations come here ##########
@@ -70,28 +67,22 @@ sub scanWeb{
 	if($_[0] eq 'PIRATEBAY'){
 		$title = "Download this torrent using magnet";
 		$totalPages = 200;
-		$lastTimePage = 0;
 		$j=3;
 		for(;$j<5;$j++){
 			for ($i=0;$i<100;$i++){
 				$currentPage = 100*($j-3)+$i+1;
 				scanWebsite("http://thepiratebay.se/browse/${j}00/$i/3");
-				if($currentPage - $lastTimePage >= $window){
-					return;
-				}
 			}
 		}
 	}
 	elsif($_[0] eq 'KICKASS'){
 		$title = "Torrent magnet link";
 		$totalPages = 800;
-		$lastTimePage = 1;
-		for ($i=$lastTimePage;$i<401;$i++){
+		for ($i=1;$i<401;$i++){
 				$currentPage = 2*$i-1;
 				scanWebsite("http://kickass.to/applications/$i/");
 				$currentPage = 2*$i;
 				scanWebsite("http://kickass.to/games/$i/");
-				last if($currentPage - $lastTimePage >= $window);
 			}
 
 	}
