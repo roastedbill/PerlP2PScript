@@ -19,14 +19,15 @@ This Perl Script automatically scan and fetching executable files via torrent
 #global variables are defined here
 
 my $ua = Mojo::UserAgent->new;
+my $totalPages;
 my $torrentCount=0;
 my $lastTimeCount=0;
 my $window=10; #add torrent to uTorrent every 10 torrent downloaded
-my $i=0;
-my $j=3;
+my $title; 
+my $i;
+my $j;
+my $website = 'EXTRATORRENT';
 
-my $db = DBI->connect('dbi:mysql:torrentlinks', 'root', 'lrs19920827')
-or die "Connection Error $DBI::errstr\n";
 
 =pod
 =head1 Reading websites from a file
@@ -40,12 +41,10 @@ The name of the file is specified by the first command line parameter
 
 
 ################## Main Function ##################
+my $db = DBI->connect('dbi:mysql:torrentlinks', 'root', 'lrs19920827')
+or die "Connection Error $DBI::errstr\n";
 
-for(;$j<5;$j++){
-	for ($i=0;$i<100;$i++){
-		#scanWebsite("http://thepiratebay.se/browse/${j}00/$i/3");
-	}
-}
+scanWeb($website);
 
 
 my $sth3 = $db->prepare_cached('SELECT * FROM piratebaylinks WHERE downloaded = ?')
@@ -71,26 +70,62 @@ This function goes to the website indicated by the parameter and scan for execut
 All the links are stored into "torrentLinks" -> "piratebaylinks" (table)
 =cut
 
-sub scanWebsite{
-	my $pageN = 100*($j-3)+$i+1;
-	say "fetching from page $pageN out of 200";
-	my $dom = Mojo::DOM->new($ua->get(@_ => {DNT => 1}) -> res -> body);
-	my @urls =split(/\n/, $dom->find('[title="Download this torrent"]')->attr('href'));
-
-	while(@urls){
-		my $url = shift @urls;
-		my $sth1 = $db->prepare_cached('SELECT * FROM piratebaylinks WHERE site=?') 
-		or die "Couldn't prepare statement: " . $db->errstr;
-		$sth1->execute('https:'.$url);
-		if (!$sth1->rows) {
-	    	print 'https:'."$url\n";
-	    	my $sth2 = $db->prepare_cached('INSERT INTO piratebaylinks(site) VALUES(?)')
-	    	or die "Couldn't prepare statement: " . $db->errstr;
-	    
-	    	$sth2->execute('https:'.$url);
-	    	$sth2->finish;
+sub scanWeb{
+	if($_[0] eq 'EXTRATORRENT'){
+		$title = "Download this torrent using magnet";
+		$totalPages = 200;
+		for ($i=1111;$i<=1680;$i++){
+			$torrentCount = $i;
+			scanWebsite("http://extratorrent.cc/category/20/Windows+-+CD-DVD+Tools+Torrents.html?page=${i}&srt=added&order=desc&pp=50");
 		}
-		$sth1->finish;
+		for ($i=1;$i<=1158;$i++) {
+			$torrentCount++;
+			scanWebsite("http://extratorrent.cc/category/25/Windows+-+Other+Torrents.html?page=${i}&srt=added&order=desc&pp=50");
+		}
+		for ($i=1;$i<=784;$i++) {
+			$torrentCount++;
+			scanWebsite("http://extratorrent.cc/category/21/Windows+-+Photo+Editing+Torrents.html?page=${i}&srt=added&order=desc&pp=50");
+		}
+		for ($i=1;$i<=179;$i++) {
+			$torrentCount++;
+			scanWebsite("http://extratorrent.cc/category/22/Windows+-+Security+Torrents.html?page=${i}&srt=added&order=desc&pp=50");
+		}
+		for ($i=1;$i<=55;$i++) {
+			$torrentCount++;
+			scanWebsite("http://extratorrent.cc/category/23/Windows+-+Sound+Editing+Torrents.html?page=${i}&srt=added&order=desc&pp=50");
+		}
+		for ($i=1;$i<=103;$i++) {
+			$torrentCount++;
+			scanWebsite("http://extratorrent.cc/category/24/Windows+-+Video+Apps+Torrents.html?page=${i}&srt=added&order=desc&pp=50");
+		}
+	}
+	else{
+		say "$_[0] is not a website supported by this script, please chech again!";
+	}
+	return;
+}
+
+sub scanWebsite{
+	say "fetching from page $torrentCount";
+	my $dom = Mojo::DOM->new($ua->get(@_ => {DNT => 1}) -> res -> body);
+	if($dom->match('a[title^="Download "][title$="torrent"]')){
+		my @urls =split(/\n/, $dom->find('a[title^="Download "][title$="torrent"]')->attr('href'));
+
+		while(@urls){
+			my $url = shift @urls;
+			my $sth1 = $db->prepare_cached('SELECT * FROM piratebaylinks WHERE site=?') 
+			or die "Couldn't prepare statement: " . $db->errstr;
+			$sth1->execute('http://extratorrent.cc'.$url);
+			if (!$sth1->rows) {
+	    		print 'http://extratorrent.cc'."$url\n";
+	    		my $sth2 = $db->prepare_cached('INSERT INTO piratebaylinks(site) VALUES(?)')
+	    		or die "Couldn't prepare statement: " . $db->errstr;
+	    	
+	    		$sth2->execute('http://extratorrent.cc'.$url);
+	    		$sth2->finish;
+			}
+			$sth1->finish;
+		}
 	}
 
 	return;
