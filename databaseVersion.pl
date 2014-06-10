@@ -44,8 +44,7 @@ The name of the file is specified by the first command line parameter
 my $db = DBI->connect('dbi:mysql:torrentlinks', 'root', 'lrs19920827')
 or die "Connection Error $DBI::errstr\n";
 
-scanWeb($website);
-
+#scanWeb($website);
 
 my $sth3 = $db->prepare_cached('SELECT * FROM piratebaylinks WHERE downloaded = ?')
 or die "Couldn't prepare statement: " . $db->errstr;
