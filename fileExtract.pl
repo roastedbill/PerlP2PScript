@@ -34,19 +34,30 @@ foreach my $fn (@list) {
 	@filesToExtract = ();
 	if($fn =~ m/^\./){ #drop out . & ..
 		next;
-	}else{
+	}
+	else{
     	my $fp = $fromDir .'\\' . $fn; 
 		my $tmpdir = File::Tempdir->new(); #temp folder, auto delete after each loop
 		my $toDir = $tmpdir->name;
-		#print "\$fp = $fp\n";
-		#print "\$fn = $fn\n";
-		#print "\$toDir = $toDir\n";	
+		say "start extracting $fn to $toDir ..........";
+			
 		if($fp =~ m/.*\.(exe|msi|iso|rar|zip|cab)$/){ #for those not inside a folder
-			processFile($fp,'C:\Users\Rensheng\Desktop\try'); #$toDir
-		}else{
-			processFolder($fp,'C:\Users\Rensheng\Desktop\try'); #$toDir
-		### send this folder ($toDir) to server here ###
+			processFile($fp,$toDir); #$toDir
+			copy($fp,$toDir);
+		}else{			
+			processFolder($fp); #work in target folder
+			copy($fp,$toDir); #$toDir
 		}
+
+		### send temp folder ($toDir) to server here ###
+
+
+
+
+
+
+
+
 	}
 }
 
@@ -59,9 +70,10 @@ sub processFolder{
 	my $fileFailed = 0; #num of files failed to extract
 	find(\&wanted, $_[0]);
 	foreach my $fp(@filesToExtract){
-		if(processFile($fp,$_[1]) == 0){
+		if(processFile($fp,$_[0]) == 0){
 			$fileProcessed++;
-		}else{
+		}
+		else{
 			$fileFailed++;
 		}
 	}
@@ -73,7 +85,7 @@ sub processFolder{
 sub processFolderOnlyEXE{
 	find(\&wantedEXE, $_[0]);
 	foreach my $fp(@filesToExtract){
-		processFile($fp,$_[1]);
+		processFile($fp,$_[0]);
 	}
 	return;
 }
@@ -88,7 +100,6 @@ sub processFolderOnlyRAR{
 
 #search wanted files from a folder, write to @filesToExtract (full path)
 sub wanted {
-	@filesToExtract = ();
 	if($File::Find::name =~ m/.*\.(exe|msi|iso|rar|zip|cab)$/){
 		$File::Find::name =~ s/\//\\/g;
   		push @filesToExtract, $File::Find::name;
@@ -98,7 +109,6 @@ sub wanted {
 }
 
 sub wantedEXE{
-	@filesToExtract = ();
 	if($File::Find::name =~ m/.*\.exe$/){
 		$File::Find::name =~ s/\//\\/g;
   		push @filesToExtract, $File::Find::name;
@@ -108,7 +118,6 @@ sub wantedEXE{
 }
 
 sub wantedRAR{
-	@filesToExtract = ();
 	if($File::Find::name =~ m/.*\.(rar|zip|cab)$/){
 		$File::Find::name =~ s/\//\\/g;
   		push @filesToExtract, $File::Find::name;
@@ -134,29 +143,46 @@ sub processFile{
 sub processISO{
 	my $ISOtemp = createExtractFolder($_[0],$_[1]);
 	if(extract($_[0],$ISOtemp) == 0){
-		say $_[1];
-		return processFolderOnlyEXE($ISOtemp,$_[1]);
-	}else{
+		#return processFolderOnlyEXE($ISOtemp);
+		return 0;
+	}
+	else{
 		### add something to indicate the extraction is not successful! ###
+		return -1;
 	}
 }
 
 sub processRAR{
-	my $tempF = $_[0];
-	$tempF =~ s/.rar$//;
-	return extract($_[0],$tempF);
+	my $RARtemp = createExtractFolder($_[0],$_[1]);
+	if(extract($_[0],$RARtemp) == 0){
+		return 0;
+	}
+	else{
+		### add something to indicate the extraction is not successful! ###
+		return -1;
+	}
 }
 
 sub processZIP{
-	my $tempF = $_[0];
-	$tempF =~ s/.zip$//;
-	return extract($_[0],$tempF);
+	my $ZIPtemp = createExtractFolder($_[0],$_[1]);
+	if(extract($_[0],$ZIPtemp) == 0){
+		return 0;
+	}
+	else{
+		### add something to indicate the extraction is not successful! ###
+		return -1;
+	}
 }
 
 sub processCAB{
-	my $tempF = $_[0];
-	$tempF =~ s/.cab$//;
-	return extract($_[0],$tempF);
+	my $CABtemp = createExtractFolder($_[0],$_[1]);
+	if(extract($_[0],$CABtemp) == 0){
+		return 0;
+	}
+	else{
+		### add something to indicate the extraction is not successful! ###
+		return -1;
+	}
 }
 
 sub processMSI{
@@ -167,9 +193,12 @@ sub processMSI{
 			extract($_[0],$MSItemp);
 			$i++;
 		}
+		elsif($i>=3 && is_folder_empty($MSItemp)){
+			### add something to indicate the extraction is not successful! ###
+			return 0;
+		}
 		else{
-			processFolderOnlyRAR($MSItemp); #including rar, zip, cab, unzip to a folder under current folder
-			return copy($_[0],$_[1]);
+			return processFolderOnlyRAR($MSItemp); #including rar, zip, cab, unzip to a folder under current folder	
 		}
 	}
 }
@@ -183,19 +212,24 @@ sub processEXE{
 			$i++;
 			say $i;
 		}
+		elsif($i>=3 && is_folder_empty($EXEtemp)){
+			### add something to indicate the extraction is not successful! ###
+			return -1;
+		}
 		else{
-			return copy($_[0],$_[1]);
+			say "$_[0] is successfully extracted to $EXEtemp!";
+			return 0;
 		}
 	}
 }
 
 #take 2 para: target file and destination, return 0 if success
 sub extract{
-	return system("UniExtract.exe  "."\"$_[0]\""." $_[1]");
+	return system("UniExtract.exe  "."\"$_[0]\""." \"$_[1]\"");
 }
 
 sub copy{
-	return system("xcopy \"$_[0]\" $_[1] \/e \/i \/h");
+	return system("xcopy \"$_[0]\" \"$_[1]\" \/e \/i \/h");
 }
 
 sub is_folder_empty {
@@ -211,10 +245,11 @@ sub createExtractFolder{
 		while(@temp){
 			$fp = shift @temp;
 		}
-		$fp = substr $fp, 0, -4;
-		say $fp;
+		if(length($fp) > 4){
+			$fp = substr $fp, 0, -4;
+		}
 		$fp = $_[1] . '\\' . $fp; #new destination folder
-		unless(-d $fp){
+		unless(-d $fp){ 
 			mkdir $fp;
 		}
 	return $fp;
