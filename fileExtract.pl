@@ -8,8 +8,11 @@ use Win32::Process;
 use Switch;
 #use DBI;
 
+open my $fh, ">", '.\logfile.txt' 
+  or die "Can't open the log file: $!";
+
 my $fromDir = 'C:\Users\Rensheng\Desktop\test'; #uTorrent download folder
-my @filesToExtract; #hold execytable files inside a folder
+my @filesToExtract; 
 
 #my $db = DBI->connect('dbi:mysql:torrentlinks', 'root', 'lrs19920827')
 #or die "Connection Error $DBI::errstr\n";
@@ -21,64 +24,56 @@ Win32::Process::Create($ProcessObj,
 		"",
 		0,
 		NORMAL_PRIORITY_CLASS,
-		".")or print STDERR "couldn't exec autoInstaller";
-#$ProcessObj->Kill(0);
+		".")or do {
+	print $fh "couldn't exec autoInstaller\n";
+	clearup();
+	exit;
+};
+#$ProcessObj->Kill(0); ---debug
 
 #scan through download folder
-opendir(downloadFolder, "$fromDir") || die "Can't open directory $fromDir: $!\n";
+opendir(downloadFolder, "$fromDir") or do {
+	print $fh "Can't open directory $fromDir: $!\n";
+	clearup();
+	exit;
+};
+
 my @list = readdir(downloadFolder);
 closedir(downloadFolder);
 
 #check each download
 foreach my $fn (@list) {
 	@filesToExtract = ();
-	if($fn =~ m/^\./){ #drop out . & ..
-		next;
-	}
-	else{
+	if ($fn ne "." && $fn ne ".."){
     	my $fp = $fromDir .'\\' . $fn; 
 		my $tmpdir = File::Tempdir->new(); #temp folder, auto delete after each loop
 		my $toDir = $tmpdir->name;
 		say "start extracting $fn to $toDir ..........";
 			
-		if($fp =~ m/.*\.(exe|msi|iso|rar|zip|cab)$/){ #for those not inside a folder
-			processFile($fp,$toDir); #$toDir
-			copy($fp,$toDir);
-		}else{			
-			processFolder($fp); #work in target folder
-			copy($fp,$toDir); #$toDir
+		if($fp =~ m/.*\.(exe|msi|iso|rar|zip|cab)$/){
+			processFile($fp,$toDir);
+		}elsif(-d $fp){			
+			processFolder($fp); #work in target folder 
 		}
 
 		### send temp folder ($toDir) to server here ###
-
-
-
-
-
-
-
-
+		system("perl ./validateWithFind.pl \"$toDir\"");
+		system("perl ./transferFile.pl C:\\Users\\Rensheng\\Desktop\\transfer");
 	}
 }
 
-$ProcessObj->Kill(0);
-#$db->disconnect();
+system("perl ./validateWithFind.pl \"$fromDir\"");
+system("perl ./transferFile.pl C:\\Users\\Rensheng\\Desktop\\transfer");
+clearup();
 
 #take 2 paras: file path & destination. 
 sub processFolder{
-	my $fileProcessed = 0; #num of successfully extracted files
-	my $fileFailed = 0; #num of files failed to extract
 	find(\&wanted, $_[0]);
 	foreach my $fp(@filesToExtract){
-		if(processFile($fp,$_[0]) == 0){
-			$fileProcessed++;
-		}
-		else{
-			$fileFailed++;
+		if(processFile($fp,$_[0]) != 0){
+			print $fh "Can't extract $fp!\n";
 		}
 	}
-	say "fileProcessed: $fileProcessed";
-	say "fileFailed: $fileFailed";
 	return;
 }
 
@@ -95,7 +90,7 @@ sub processFolderOnlyRAR{
 	foreach my $fp(@filesToExtract){
 		processFile($fp,$_[0]);
 	}
-	return;
+	return 0;
 }
 
 #search wanted files from a folder, write to @filesToExtract (full path)
@@ -143,11 +138,9 @@ sub processFile{
 sub processISO{
 	my $ISOtemp = createExtractFolder($_[0],$_[1]);
 	if(extract($_[0],$ISOtemp) == 0){
-		#return processFolderOnlyEXE($ISOtemp);
-		return 0;
-	}
-	else{
-		### add something to indicate the extraction is not successful! ###
+		return processFolderOnlyRAR($ISOtemp);
+	}else{
+		print $fh "Can't extract ISO file $_[0]\n";
 		return -1;
 	}
 }
@@ -155,10 +148,10 @@ sub processISO{
 sub processRAR{
 	my $RARtemp = createExtractFolder($_[0],$_[1]);
 	if(extract($_[0],$RARtemp) == 0){
-		return 0;
+		return processFolderOnlyRAR($RARtemp);
 	}
 	else{
-		### add something to indicate the extraction is not successful! ###
+		print $fh "Can't extract RAR file $_[0]\n";
 		return -1;
 	}
 }
@@ -166,10 +159,10 @@ sub processRAR{
 sub processZIP{
 	my $ZIPtemp = createExtractFolder($_[0],$_[1]);
 	if(extract($_[0],$ZIPtemp) == 0){
-		return 0;
+		return processFolderOnlyRAR($ZIPtemp);
 	}
 	else{
-		### add something to indicate the extraction is not successful! ###
+		print $fh "Can't extract ZIP file $_[0]\n";
 		return -1;
 	}
 }
@@ -177,10 +170,10 @@ sub processZIP{
 sub processCAB{
 	my $CABtemp = createExtractFolder($_[0],$_[1]);
 	if(extract($_[0],$CABtemp) == 0){
-		return 0;
+		return processFolderOnlyRAR($CABtemp);
 	}
 	else{
-		### add something to indicate the extraction is not successful! ###
+		print $fh "Can't extract CAB file $_[0]\n";
 		return -1;
 	}
 }
@@ -194,11 +187,11 @@ sub processMSI{
 			$i++;
 		}
 		elsif($i>=3 && is_folder_empty($MSItemp)){
-			### add something to indicate the extraction is not successful! ###
-			return 0;
+			print $fh "Can't extract MSI file $_[0]\n";
+			return -1;
 		}
 		else{
-			return processFolderOnlyRAR($MSItemp); #including rar, zip, cab, unzip to a folder under current folder	
+			return processFolderOnlyRAR($MSItemp); 	
 		}
 	}
 }
@@ -213,12 +206,12 @@ sub processEXE{
 			say $i;
 		}
 		elsif($i>=3 && is_folder_empty($EXEtemp)){
-			### add something to indicate the extraction is not successful! ###
+			print $fh "Can't extract EXE file $_[0]\n";
 			return -1;
 		}
 		else{
 			say "$_[0] is successfully extracted to $EXEtemp!";
-			return 0;
+			return processFolderOnlyRAR($EXEtemp);
 		}
 	}
 }
@@ -226,10 +219,6 @@ sub processEXE{
 #take 2 para: target file and destination, return 0 if success
 sub extract{
 	return system("UniExtract.exe  "."\"$_[0]\""." \"$_[1]\"");
-}
-
-sub copy{
-	return system("xcopy \"$_[0]\" \"$_[1]\" \/e \/i \/h");
 }
 
 sub is_folder_empty {
@@ -253,4 +242,15 @@ sub createExtractFolder{
 			mkdir $fp;
 		}
 	return $fp;
+}
+
+sub clearup{
+	if (defined $fh){
+		close $fh;
+	}
+	
+	if (defined $ProcessObj){
+		$ProcessObj->Kill(0);
+	}
+	return;
 }
